@@ -1,6 +1,5 @@
 package ua.wwind.glotov.labirint_maker
 
-import java.util.*
 
 enum class Directions {
     NORTH, SOUTH, EAST, WEST, START, END,
@@ -62,20 +61,25 @@ class Game(
     }
     private var currentCell: Cell = cellList[0]
 
-    private fun buildPathToNextCell(move: Move, nextMove: Move, crossStack: Stack<Move>): Move {
+    private fun buildPathToNextCell(
+        move: Move,
+        nextMove: Move,
+        crossStack: MutableList<Move>,
+    ): Move {
         nextMove.cell.type = CellType.PATH
         if (move.direction != nextMove.direction
             && (move.neighbors?.size ?: 0) > 1
         ) {
             move.cell.type = CellType.CROSS
-            crossStack.push(move)
+            crossStack.add(move)
         }
         move.cell.getNeighborsWithCellType(cellList) {
             it !in listOf(CellType.PATH, CellType.CROSS, CellType.FULL_LOCK)
         }.also {
             for (neighbor in it) {
                 when (neighbor.cell.type) {
-                    CellType.LOCK -> if (!neighbor.cell.isEndOfMap(this)) neighbor.cell.type = CellType.FULL_LOCK
+                    CellType.LOCK -> if (!neighbor.cell.isEndOfMap(this)) neighbor.cell.type =
+                        CellType.FULL_LOCK
                     null -> neighbor.cell.type = CellType.LOCK
                     else -> {}
                 }
@@ -84,43 +88,53 @@ class Game(
         return buildPathFromCell(nextMove, crossStack)
     }
 
-    private fun buildPathFromCell(move: Move, crossStack: Stack<Move>): Move {
+    private fun buildPathFromCell(move: Move, crossStack: MutableList<Move>): Move {
         move.neighbors = move.cell.getNeighborsWithCellType(cellList) { it == null }
         return if (move.neighbors?.isEmpty() != false) move
-        else move.neighbors!!.random().run {
+        else if (move.cell.isEndOfMap(this)) {
+            for (neighbor in move.neighbors!!) neighbor.cell.type = CellType.FULL_LOCK
+            return move
+        } else move.neighbors!!.random().run {
             buildPathToNextCell(move, Move(cell, direction), crossStack)
         }
     }
 
     init {
         currentCell.type = CellType.CROSS
-        val crossStack: Stack<Move> = Stack()
+        val crossList: MutableList<Move> = mutableListOf()
         (Move(currentCell).let {
-            crossStack.push(it)
-            buildPathFromCell(it, crossStack)
+            crossList.add(it)
+            buildPathFromCell(it, crossList)
         }).let {
             println("Last move is ${it.cell} with dir ${it.direction}")
+            printMap()
             var lastMove: Move = it
             var pathFound: Boolean = it.cell.isEndOfMap(this)
-            while (!crossStack.isEmpty()) {
-                val lastCross = crossStack.pop()
-                if (pathFound && (1..20).random() != 1) continue
-                lastCross.neighbors?.filter { neighbor ->
+            while (crossList.isNotEmpty()) {
+                val indexCross = crossList.size / 3
+                val middleCross = crossList[indexCross]
+                middleCross.neighbors?.filter { neighbor ->
                     neighbor.cell.type == CellType.LOCK
                 }.let { neighborList ->
+                    if ((neighborList?.size ?: 0) < 2 || pathFound) crossList.removeAt(indexCross)
                     if (neighborList?.isEmpty() != false) null
                     else {
-                        for (neighbor in neighborList) {
-                            neighbor.cell.type = CellType.PATH
-                            lastMove =
-                                buildPathFromCell(Move(neighbor.cell, neighbor.direction),
-                                    crossStack)
-                            pathFound = pathFound || lastMove.cell.isEndOfMap(this)
+                        val neighbor = neighborList.random()
+                        neighbor.cell.type = CellType.PATH
+                        lastMove =
+                            buildPathFromCell(Move(neighbor.cell, neighbor.direction),
+                                crossList)
+                        if (!pathFound && lastMove.cell.isEndOfMap(this)) {
+                            pathFound = true
+                            // remove last 10 cross to take path in safe
+                            for (i in crossList.size - 1 downTo kotlin.math.max(crossList.size - 10,
+                                0))
+                                crossList.removeAt(i)
                         }
+                        println("Last move is ${lastMove.cell} with dir ${lastMove.direction}")
                     }
                 }
             }
-            println("Last move is ${lastMove.cell} with dir ${lastMove.direction}")
         }
         for (cell in cellList.filter { it.type !in listOf(CellType.PATH, CellType.CROSS) }) {
             cell.type = CellType.WALL
@@ -131,19 +145,22 @@ class Game(
 
     fun printMap() {
         var y: Int = 0
-        var mapLine = ""
+        var mapLine = "  "
+        println("".padEnd((width + 2) * 2, CellType.WALL.sign.toCharArray()[0]))
         for (cell in cellList) {
             if (cell.y != y) {
                 y = cell.y
+                mapLine += CellType.WALL.sign
                 println(mapLine)
-                mapLine = ""
+                mapLine = CellType.WALL.sign
             }
-            mapLine += cell.type?.sign ?: "_"
+            mapLine += cell.type?.sign ?: "__"
         }
         println(mapLine)
+        println("".padEnd((width + 2) * 2, CellType.WALL.sign.toCharArray()[0]))
     }
 }
 
 fun main(args: Array<String>) {
-    val game = Game(25, 25)
+    val game = Game(30, 30)
 }
