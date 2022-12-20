@@ -16,17 +16,14 @@ enum class CellType(val sign: String) {
 data class Cell(val x: Int, val y: Int, var type: CellType? = null) {
     fun getNeighborsWithCellType(
         cellList: List<Cell>,
-        filterType: ((CellType?) -> Boolean)?,
+        filterType: (CellType?) -> Boolean,
     ): List<Neighbor> {
         return cellList.filter {
             (it.x == x - 1 || it.x == x + 1 || it.y == y - 1 || it.y == y + 1)
-                    && (it.x == x || it.y == y) && !(it.x == x && it.y == y)
-                    && filterType?.let { filter -> filter(it.type) } ?: true
-        }.let { cells ->
-            Array(cells.size) {
-                val cell = cells[it]
-                Neighbor(cell, getDirectionToNeighbor(this, cell))
-            }.toList()
+                    && (it.x == x || it.y == y)
+                    && filterType(it.type)
+        }.map {
+            Neighbor(it, getDirectionToNeighbor(this, it))
         }
     }
 
@@ -41,6 +38,7 @@ data class Cell(val x: Int, val y: Int, var type: CellType? = null) {
 }
 
 data class Neighbor(val cell: Cell, val direction: Directions)
+
 data class Move(
     val cell: Cell,
     val direction: Directions? = null,
